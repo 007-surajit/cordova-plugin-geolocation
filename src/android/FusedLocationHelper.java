@@ -90,6 +90,7 @@ public class FusedLocationHelper extends Activity implements GoogleApiClient.Con
 	private static final int ALL_PERMISSIONS_RESULT = 1011;
     
     protected boolean mGetAddress;
+    protected JSONArray arguments;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -175,7 +176,7 @@ public class FusedLocationHelper extends Activity implements GoogleApiClient.Con
 
             JSONObject obj = new JSONObject();
             try {
-                obj.put("user_id", 1);
+                obj.put("user_id", arguments.getInt(0));
                 obj.put("latitude", location.getLatitude());
                 obj.put("longitude", location.getLongitude());
                 obj.put("timestamp", location.getTime());
@@ -209,9 +210,10 @@ public class FusedLocationHelper extends Activity implements GoogleApiClient.Con
         mActivity = activity;
     }
 
-    public void startLocationTracking(CallbackContext cb) {
+    public void startLocationTracking(CallbackContext cb, JSONArray args) {
         mGetAddress = false;
 		mCallBackWhenGotLocation = cb;
+        arguments = args;
 		CheckForPlayServices();
         SetupLocationFetching(cb);
     }

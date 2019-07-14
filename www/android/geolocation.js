@@ -54,7 +54,11 @@ module.exports = {
                 error(new PositionError(PositionError.PERMISSION_DENIED, 'Illegal Access'));
             }
         };
-        exec(win, fail, 'Geolocation', 'locationTracking', args);
+        if(args.maximumAge) {
+            exec(win, fail, 'Geolocation', 'locationTracking', [args.maximumAge, args.timeout, args.enableHighAccuracy]);
+        }else {
+            exec(win, fail, 'Geolocation', 'locationTracking', []);
+        }
 
         return pluginWatchId;
     },
