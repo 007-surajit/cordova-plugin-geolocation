@@ -113,13 +113,14 @@ public class Geolocation extends CordovaPlugin {
         
          if(hasPermisssion())
         {
-            if (action.equals("startLocationTracking")) {
-                locHelper.startLocationTracking(callbackContext);
-                return true;
-            }
-            else if (action.equals("stopLocationTracking")) {
-                locHelper.stopLocationTracking(callbackContext);
-                return true;
+            if (action.equals("locationTracking")) {
+                if (args.getBoolean(0)) {
+                    locHelper.startLocationTracking(callbackContext);
+                    return true;
+                } else {
+                    locHelper.stopLocationTracking(callbackContext);
+                    return true;
+                }
             }
          }
          else {
