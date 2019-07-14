@@ -66,6 +66,6 @@ module.exports = {
             geo.clearWatch(nativeWatchId);
         };
 
-        exec(win, null, 'Geolocation', 'stopLocationTracking', []);
+        exec(win, null, 'Geolocation', 'getPermission', []);
     }
 };
