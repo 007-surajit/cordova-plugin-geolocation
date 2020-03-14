@@ -56,7 +56,7 @@ public class LocationUpdatesBroadcastReceiver extends BroadcastReceiver {
                     List<Location> locations = result.getLocations();
                     if(locations.size() > 0) {
                         LocationResultHelper locationResultHelper = new LocationResultHelper(
-                                context, locations);
+                                context, locations.get(0));
 //                        FusedLocationHelper.onLocationReceived(locations.get(0));
                         locationResultHelper.saveResults();
                     }

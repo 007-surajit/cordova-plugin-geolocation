@@ -13,7 +13,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 	private static DatabaseHelper sInstance;
 	private Context myContext;
 	// Table Name
-	public static final String LOCATION = "Locations";
+	public static final String LOCATION = "netram_user_location";
 
 	// Table columns
 	public static final String _ID = "_id";
@@ -21,7 +21,6 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 	public static final String LATITUDE = "latitude";	
 	public static final String LONGITUDE = "longitude";
 	public static final String TIMESTAMP = "timestamp";
-	public static final String ADDRESS = "address";
 	public static final String PUNCHOUT = "punchout";
 
 	// Database Information
@@ -35,7 +34,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 	private SQLiteDatabase database;
 
 	// Creating table query
-	private static final String CREATE_TABLE = "create table if not exists " + LOCATION + "(" + USER_ID + " TEXT NOT NULL, " + LATITUDE + " TEXT, " + LONGITUDE + " TEXT, " + TIMESTAMP + " TEXT, " + ADDRESS + " TEXT, " + PUNCHOUT + " TEXT);";
+	private static final String CREATE_TABLE = "create table if not exists " + LOCATION + "(" + USER_ID + " TEXT NOT NULL, " + LATITUDE + " TEXT, " + LONGITUDE + " TEXT, " + TIMESTAMP + " TEXT, " + PUNCHOUT + " TEXT);";
 
 	 public static synchronized DatabaseHelper getInstance(Context context) {
 

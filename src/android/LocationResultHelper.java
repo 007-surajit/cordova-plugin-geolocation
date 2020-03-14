@@ -16,36 +16,12 @@
 
 package org.apache.cordova.geolocation;
 
-import android.app.Notification;
 import android.app.NotificationManager;
-import android.app.PendingIntent;
 import android.content.Context;
-import android.content.Intent;
-import android.graphics.Color;
-import android.location.Address;
-import android.location.Geocoder;
 import android.location.Location;
 import android.preference.PreferenceManager;
-import android.support.v4.app.TaskStackBuilder;
-import android.app.NotificationChannel;
-import android.text.TextUtils;
-import android.util.Log;
 
-
-import com.android.volley.Request;
-import com.android.volley.Response;
-import com.android.volley.VolleyError;
-import com.android.volley.toolbox.JsonObjectRequest;
-
-import org.json.JSONException;
-import org.json.JSONObject;
-
-import java.io.IOException;
-import java.text.DateFormat;
-import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
-import java.util.Locale;
 
 /**
  * Class to process location results.
@@ -59,12 +35,12 @@ class LocationResultHelper {
     final private static String UNKNOWN_LOCATION = "Unknown location";
 
     private Context mContext;
-    private List<Location> mLocations;
+    private Location mLocation;
     private NotificationManager mNotificationManager;
 
-    LocationResultHelper(Context context, List<Location> locations) {
+    LocationResultHelper(Context context, Location location) {
         mContext = context;
-        mLocations = locations;
+        mLocation = location;
 
 //        NotificationChannel channel = new NotificationChannel(PRIMARY_CHANNEL,
 //                context.getString(R.string.default_channel), NotificationManager.IMPORTANCE_DEFAULT);
@@ -84,18 +60,20 @@ class LocationResultHelper {
 //
 
     private String getLocationResultText() {
-        if (mLocations.isEmpty()) {
-            return UNKNOWN_LOCATION;
-        }
+//        if (mLocation.isEmpty()) {
+//            return UNKNOWN_LOCATION;
+//        }
         StringBuilder sb = new StringBuilder();
-        for (Location location : mLocations) {
+//        for (Location location : mLocations) {
             // sb.append("(");
-            sb.append(location.getLatitude());
+            sb.append(mLocation.getLatitude());
             sb.append(",");
-            sb.append(location.getLongitude());
+            sb.append(mLocation.getLongitude());
+            sb.append(",");
+            sb.append(mLocation.getTime());
             // sb.append(")");
-            sb.append("\n");
-        }
+//            sb.append("\n");
+//        }
         return sb.toString();
     }
 

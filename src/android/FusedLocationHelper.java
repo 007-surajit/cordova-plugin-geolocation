@@ -5,6 +5,7 @@ import android.app.Activity;
 import android.app.Dialog;
 import android.app.PendingIntent;
 import android.content.ContentValues;
+import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.IntentSender;
@@ -50,12 +51,14 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import android.preference.PreferenceActivity;
 
 // import android.support.v7.app.AlertDialog;
 // import android.support.v7.app.AppCompatActivity;
 
 
-public class FusedLocationHelper extends Activity implements GoogleApiClient.ConnectionCallbacks,
+public class FusedLocationHelper extends PreferenceActivity implements
+        GoogleApiClient.ConnectionCallbacks,
                GoogleApiClient.OnConnectionFailedListener,
                SharedPreferences.OnSharedPreferenceChangeListener,
         LocationListener, ResultCallback<LocationSettingsResult>   {
@@ -72,7 +75,7 @@ public class FusedLocationHelper extends Activity implements GoogleApiClient.Con
      /**
      * The desired interval for location updates. Inexact. Updates may be more or less frequent.
      */
-    private static final long UPDATE_INTERVAL = 10 * 1000; // = 20 minutes
+    private static final long UPDATE_INTERVAL = 20 * 1000; // = 20 minutes
 
     /**
      * The fastest rate for active location updates. Updates will never be more frequent
@@ -101,6 +104,7 @@ public class FusedLocationHelper extends Activity implements GoogleApiClient.Con
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
 
         // we add permissions we need to request location of the users
         /* permissions.add(Manifest.permission.ACCESS_FINE_LOCATION);
@@ -284,6 +288,9 @@ public class FusedLocationHelper extends Activity implements GoogleApiClient.Con
         mGetAddress = false;
 		mCallBackWhenGotLocation = cb;
         arguments = args;
+        setUserId();
+        PreferenceManager.getDefaultSharedPreferences(mActivity)
+                .registerOnSharedPreferenceChangeListener(this);
 		CheckForPlayServices();
         SetupLocationFetching(cb);
     }
@@ -291,6 +298,8 @@ public class FusedLocationHelper extends Activity implements GoogleApiClient.Con
     public void stopLocationTracking(CallbackContext cb) {
         mGetAddress = false;
 		mCallBackWhenGotLocation = cb;
+        PreferenceManager.getDefaultSharedPreferences(mActivity)
+                .unregisterOnSharedPreferenceChangeListener(this);
         StopLocationFetching(cb);
     }
 
@@ -450,29 +459,29 @@ public class FusedLocationHelper extends Activity implements GoogleApiClient.Con
             }else {
                 jsonLocation.put("punchout", 1);
             }
-            try {
-                addresses = geocoder.getFromLocation(
-                        lastLocation.getLatitude(),
-                        lastLocation.getLongitude(),
-                        1);
-            } catch (IOException ioException) {
-                ErrorHappened("Service not available");       
-                return;
-            } catch (IllegalArgumentException illegalArgumentException) {
-                ErrorHappened("Invalid location params used");
-                return;
-            }
-            // Handle case where no address was found.
-            if (addresses == null || addresses.size()  == 0) {
-                ErrorHappened("No address found");
-            } else {
-                Address address = addresses.get(0);
-                ArrayList<String> addressFragments = new ArrayList<String>();
-                for(int i = 0; i < address.getMaxAddressLineIndex(); i++) {
-                    addressFragments.add(address.getAddressLine(i));
-                }
-                jsonLocation.put("address", TextUtils.join(System.getProperty("line.separator"), addressFragments));
-            }
+//            try {
+//                addresses = geocoder.getFromLocation(
+//                        lastLocation.getLatitude(),
+//                        lastLocation.getLongitude(),
+//                        1);
+//            } catch (IOException ioException) {
+//                ErrorHappened("Service not available");
+//                return;
+//            } catch (IllegalArgumentException illegalArgumentException) {
+//                ErrorHappened("Invalid location params used");
+//                return;
+//            }
+//            // Handle case where no address was found.
+//            if (addresses == null || addresses.size()  == 0) {
+//                ErrorHappened("NoLocationUpdatesBroadcastReceiver address found");
+//            } else {
+//                Address address = addresses.get(0);
+//                ArrayList<String> addressFragments = new ArrayList<String>();
+//                for(int i = 0; i < address.getMaxAddressLineIndex(); i++) {
+//                    addressFragments.add(address.getAddressLine(i));
+//                }
+//                jsonLocation.put("address", TextUtils.join(System.getProperty("line.separator"), addressFragments));
+//            }
         }catch (JSONException ex) {
             ErrorHappened("Error generating JSON from location"); 
         }
@@ -483,8 +492,20 @@ public class FusedLocationHelper extends Activity implements GoogleApiClient.Con
     public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String s) {
         if (s.equals(LocationResultHelper.KEY_LOCATION_UPDATES_RESULT)) {
 //            mLocationUpdatesResultView.setText(LocationResultHelper.getSavedLocationResult(this));
-            Log.i(TAG,LocationResultHelper.getSavedLocationResult(this));
+            Log.i(TAG, getSavedLocationResult());
+            String[] values = getSavedLocationResult().split(",");
+            Location targetLocation = new Location("");//provider name is unnecessary
+            targetLocation.setLatitude(Double.valueOf(values[0]));
+            targetLocation.setLongitude(Double.valueOf(values[1]));
+            targetLocation.setTime(Long.valueOf(values[2]));
+            locationObj = targetLocation;
+            GetAddressFromLocation(locationObj);
         }
+    }
+   
+    protected String getSavedLocationResult() {
+        return PreferenceManager.getDefaultSharedPreferences(mActivity)
+                .getString(LocationResultHelper.KEY_LOCATION_UPDATES_RESULT, "");
     }
    
     @Override
@@ -534,7 +555,6 @@ public class FusedLocationHelper extends Activity implements GoogleApiClient.Con
                 break;
           }		
     }
-    
     
 }
 
