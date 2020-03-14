@@ -1,76 +1,63 @@
 package org.apache.cordova.geolocation;
 
-import org.apache.cordova.CordovaPlugin;
-import org.apache.cordova.PluginResult;
-import org.apache.cordova.CallbackContext;
-
 import android.Manifest;
-import org.json.JSONObject;
-import org.json.JSONArray;
-import org.json.JSONException;
-
-import android.location.Location;
-
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.app.Dialog;
-import android.text.TextUtils;
-
+import android.app.PendingIntent;
+import android.content.ContentValues;
+import android.content.DialogInterface;
+import android.content.Intent;
+import android.content.IntentSender;
+import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.location.Address;
 import android.location.Geocoder;
 import android.location.Location;
+import android.os.Build;
+import android.os.Bundle;
+import android.preference.PreferenceManager;
+import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
+import android.support.v4.app.ActivityCompat;
+import android.text.TextUtils;
+import android.util.Log;
+import android.widget.Toast;
 
-import android.content.Context;
-import android.content.Intent;
-import android.content.IntentSender;
-import android.content.IntentSender.SendIntentException;
-import android.content.SharedPreferences;
-import android.content.DialogInterface;
+import com.android.volley.Request;
+import com.android.volley.Response;
+import com.android.volley.VolleyError;
+import com.android.volley.toolbox.JsonObjectRequest;
+import com.google.android.gms.common.ConnectionResult;
+import com.google.android.gms.common.GooglePlayServicesUtil;
+import com.google.android.gms.common.api.GoogleApiClient;
+import com.google.android.gms.common.api.PendingResult;
+import com.google.android.gms.common.api.ResultCallback;
+import com.google.android.gms.common.api.Status;
+import com.google.android.gms.location.LocationListener;
+import com.google.android.gms.location.LocationRequest;
+import com.google.android.gms.location.LocationServices;
+import com.google.android.gms.location.LocationSettingsRequest;
+import com.google.android.gms.location.LocationSettingsResult;
+import com.google.android.gms.location.LocationSettingsStatusCodes;
+
+import org.apache.cordova.CallbackContext;
+import org.apache.cordova.PluginResult;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-import android.os.Bundle;
-import android.os.Handler;
-import android.util.Log;
-import android.widget.Toast;
-
-import android.content.pm.PackageManager;
-import android.os.Build;
-
-import android.support.annotation.NonNull;
-import android.support.annotation.Nullable;
-import android.support.v4.app.ActivityCompat;
 // import android.support.v7.app.AlertDialog;
 // import android.support.v7.app.AppCompatActivity;
-import com.android.volley.toolbox.JsonObjectRequest;
-
-import com.android.volley.Request;
-import com.android.volley.Response;
-import com.android.volley.VolleyError;
-import com.android.volley.Response.ErrorListener;
-
-import com.google.android.gms.common.ConnectionResult;
-import com.google.android.gms.common.api.PendingResult;
-import com.google.android.gms.common.api.ResultCallback;
-import com.google.android.gms.common.api.GoogleApiClient;
-import com.google.android.gms.common.api.Status;
-import com.google.android.gms.common.api.GoogleApiClient.ConnectionCallbacks;
-import com.google.android.gms.common.api.GoogleApiClient.OnConnectionFailedListener;
-import com.google.android.gms.common.GooglePlayServicesUtil;
-
-import com.google.android.gms.location.LocationServices;
-import com.google.android.gms.location.LocationRequest;
-import com.google.android.gms.location.LocationSettingsRequest;
-import com.google.android.gms.location.LocationSettingsResult;
-import com.google.android.gms.location.LocationSettingsStatusCodes;
-import com.google.android.gms.location.LocationListener;
 
 
 public class FusedLocationHelper extends Activity implements GoogleApiClient.ConnectionCallbacks,
                GoogleApiClient.OnConnectionFailedListener,
+               SharedPreferences.OnSharedPreferenceChangeListener,
         LocationListener, ResultCallback<LocationSettingsResult>   {
                    
     protected Activity mActivity = null;
@@ -78,10 +65,29 @@ public class FusedLocationHelper extends Activity implements GoogleApiClient.Con
     protected CallbackContext mCallBackWhenGotLocation;
     protected GoogleApiClient mGoogleApiClient;
     protected LocationSettingsRequest mLocationSettingsRequest;
-	protected LocationRequest mLocationRequest;
+    protected LocationRequest mLocationRequest;
+    private Location locationObj;
     protected static final int REQUEST_CHECK_SETTINGS = 0x1;
     private static final int PLAY_SERVICES_RESOLUTION_REQUEST = 9000;
-    private static final long UPDATE_INTERVAL = 10 * 60 * 1000, FASTEST_INTERVAL = 10 * 60 * 1000; // = 10 minutes
+     /**
+     * The desired interval for location updates. Inexact. Updates may be more or less frequent.
+     */
+    private static final long UPDATE_INTERVAL = 10 * 1000; // = 20 minutes
+
+    /**
+     * The fastest rate for active location updates. Updates will never be more frequent
+     * than this value, but they may be less frequent.
+     */
+    private static final long FASTEST_UPDATE_INTERVAL = UPDATE_INTERVAL / 2;
+     /**
+     * The max time before batched results are delivered by location services. Results may be
+     * delivered sooner than this interval.
+     */
+    private static final long MAX_WAIT_TIME = UPDATE_INTERVAL * 3;
+
+    final static String KEY_USER_ID = "user-id";
+
+    public static DBManager dbManager;
 
     private ArrayList<String> permissionsToRequest;
 	private ArrayList<String> permissionsRejected = new ArrayList<>();
@@ -156,10 +162,30 @@ public class FusedLocationHelper extends Activity implements GoogleApiClient.Con
                 Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED
             &&  ActivityCompat.checkSelfPermission(mActivity,
                 Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-        Toast.makeText(this, "You need to enable permissions to display location !", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, "You need to enable permissions to display location !", Toast.LENGTH_SHORT).show();
         }
+        Log.i(TAG, "Starting location updates");
+        try {
+            // LocationServices.FusedLocationApi.requestLocationUpdates(mGoogleApiClient, mLocationRequest, this);
+            LocationServices.FusedLocationApi.requestLocationUpdates(mGoogleApiClient, mLocationRequest, getPendingIntent());
+        } catch (SecurityException e) {
+            // LocationRequestHelper.setRequesting(this, false);
+            e.printStackTrace();
+        }
+    }
 
-        LocationServices.FusedLocationApi.requestLocationUpdates(mGoogleApiClient, mLocationRequest, this);
+    private PendingIntent getPendingIntent() {
+        Intent intent = new Intent(mActivity, LocationUpdatesBroadcastReceiver.class);
+        intent.setAction(LocationUpdatesBroadcastReceiver.ACTION_PROCESS_UPDATES);
+        return PendingIntent.getBroadcast(mActivity, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT);
+    }
+
+    @Override
+    public void onConnectionSuspended(int cause) {
+        // The connection to Google Play services was lost for some reason. We call connect() to
+        // attempt to re-establish the connection.
+       // Log.i(TAG, "Connection suspended");
+        mGoogleApiClient.connect();
     }
 
     @Override
@@ -170,39 +196,83 @@ public class FusedLocationHelper extends Activity implements GoogleApiClient.Con
     @Override
     public void onLocationChanged(Location location) {
         if (location != null) {
+            locationObj = location;
             // locationTv.setText("Latitude : " + location.getLatitude() + "\nLongitude : " + location.getLongitude());
             Log.d(TAG, "Latitude : " + location.getLatitude() + "\nLongitude : " + location.getLongitude());
-            String locationApiUrl = mActivity.getString(mActivity.getResources().getIdentifier( "save_url", "string", mActivity.getPackageName()));
 
-            JSONObject obj = new JSONObject();
+            JSONObject jsonLocation = new JSONObject();
             try {
-                obj.put("user_id", arguments.getInt(0));
-                obj.put("latitude", location.getLatitude());
-                obj.put("longitude", location.getLongitude());
-                obj.put("timestamp", location.getTime());
-
+                // jsonLocation.put("user_id", arguments.getInt(0));
+                jsonLocation.put("latitude", location.getLatitude());
+                jsonLocation.put("longitude", location.getLongitude());
+                // jsonLocation.put("timestamp", location.getTime());
+                // jsonLocation.put("punchout", 0);
+                GetAddressFromLocation(location);
             } catch (JSONException e) {
                 throw new RuntimeException(e);
             }
-
-            JsonObjectRequest jsonObjectRequest = new JsonObjectRequest(Request.Method.POST, locationApiUrl, obj,
-                    new Response.Listener<JSONObject>() {
-                        @Override
-                        public void onResponse(JSONObject response) {
-                            System.out.println(response);
-//                        hideProgressDialog();
-                        }
-                    },
-                    new Response.ErrorListener() {
-                        @Override
-                        public void onErrorResponse(VolleyError error) {
-//                            hideProgressDialog();
-                        }
-                    });
-            jsonObjectRequest.setShouldCache(false);
-            // Access the RequestQueue through your singleton class.
-            MySingleton.getInstance(mActivity).addToRequestQueue(jsonObjectRequest);
+            // postLocationDataToServer(jsonLocation);
+            
         }
+    }
+
+    public static void onLocationReceived(Location location) {
+        Log.d(TAG, "Location Event Received!");
+//        StringBuilder sb = new StringBuilder();
+//        for (Location location : mLocations) {
+//            sb.append("(");
+//            sb.append(location.getLatitude());
+//            sb.append(", ");
+//            sb.append(location.getLongitude());
+//            sb.append(")");
+//            sb.append("\n");
+//        }
+//        Log.d(TAG, sb.toString());
+//        GetAddressFromLocation(location);
+    }
+
+    private void postLocationDataToServer(JSONObject jsonLocation) {
+        String locationApiUrl = mActivity.getString(mActivity.getResources().getIdentifier( "save_url", "string", mActivity.getPackageName()));
+
+        JsonObjectRequest jsonObjectRequest = new JsonObjectRequest(Request.Method.POST, locationApiUrl, jsonLocation,
+                new Response.Listener<JSONObject>() {
+                    @Override
+                    public void onResponse(JSONObject response) {
+                        System.out.println(response);
+    //                        hideProgressDialog();
+                    }
+                },
+                new Response.ErrorListener() {
+                    @Override
+                    public void onErrorResponse(VolleyError error) {
+    //                            hideProgressDialog();
+                        // save location to database
+                        saveLocationOffline(jsonLocation);
+                    }
+                });
+        jsonObjectRequest.setShouldCache(false);
+        // Access the RequestQueue through your singleton class.
+        MySingleton.getInstance(mActivity).addToRequestQueue(jsonObjectRequest);
+    }
+    
+
+    public void saveLocationOffline(JSONObject jsonLocation) {
+        dbManager = new DBManager(mActivity);
+        dbManager.open();
+        ContentValues contentValue = new ContentValues();
+        try {
+            contentValue.put("user_id", getUserId());
+            contentValue.put("latitude", jsonLocation.getString("latitude"));
+            contentValue.put("longitude", jsonLocation.getString("longitude"));
+            contentValue.put("timestamp", jsonLocation.getString("timestamp"));
+            contentValue.put("punchout", jsonLocation.getString("punchout"));
+        } catch (JSONException e) {
+            throw new RuntimeException(e);
+        }
+        if(dbManager.insertLocationData(contentValue) != -1){
+            Log.i(TAG, "Location saved to database");
+        }
+        dbManager.close();
     }
 
 
@@ -222,6 +292,22 @@ public class FusedLocationHelper extends Activity implements GoogleApiClient.Con
         mGetAddress = false;
 		mCallBackWhenGotLocation = cb;
         StopLocationFetching(cb);
+    }
+
+    public void setUserId() {
+        try {
+            PreferenceManager.getDefaultSharedPreferences(mActivity.getApplicationContext())
+                    .edit()
+                    .putString(KEY_USER_ID, String.valueOf(arguments.getInt(0)))
+                    .apply();
+        }catch (JSONException ex) {
+            Log.e(TAG, "Could not set user id in preference");
+        }
+    }
+
+    public String getUserId() {
+        return PreferenceManager.getDefaultSharedPreferences(mActivity.getApplicationContext())
+                .getString(KEY_USER_ID, "");
     }
     
     public void GetAddress(CallbackContext cb) {
@@ -249,17 +335,26 @@ public class FusedLocationHelper extends Activity implements GoogleApiClient.Con
 		}
 	}
 
-    @Override
-    public void onConnectionSuspended(int cause) {
-        // The connection to Google Play services was lost for some reason. We call connect() to
-        // attempt to re-establish the connection.
-       // Log.i(TAG, "Connection suspended");
-        mGoogleApiClient.connect();
-    }
-
     protected void ErrorHappened(String msg) {
         Log.i(TAG, msg);
-        mCallBackWhenGotLocation.sendPluginResult(new PluginResult(PluginResult.Status.ERROR, msg));
+        if(locationObj != null) {
+            /* JSONObject jsonLocation = new JSONObject();
+            try {
+                jsonLocation.put("latitude", String.valueOf(locationObj.getLatitude()));
+                jsonLocation.put("longitude", String.valueOf(locationObj.getLongitude()));
+                jsonLocation.put("timestamp", String.valueOf(locationObj.getTime()));
+                if (mGoogleApiClient != null  &&  mGoogleApiClient.isConnected()) {
+                    jsonLocation.put("punchout", 0);
+                }else {
+                    jsonLocation.put("punchout", 1); // true if location tracking stopped due to punch out
+                }
+                mCallBackWhenGotLocation.success(jsonLocation);
+            }catch (JSONException ex) {
+                ErrorHappened("Error generating JSON from location"); 
+            }  */
+        }else {
+            mCallBackWhenGotLocation.sendPluginResult(new PluginResult(PluginResult.Status.ERROR, msg));
+        }
     }
 
     protected void SetupLocationFetching(CallbackContext cb) {
@@ -273,9 +368,13 @@ public class FusedLocationHelper extends Activity implements GoogleApiClient.Con
     protected void StopLocationFetching(CallbackContext cb) {
         // stop location updates
         if (mGoogleApiClient != null  &&  mGoogleApiClient.isConnected()) {
-            LocationServices.FusedLocationApi.removeLocationUpdates(mGoogleApiClient, this);
+            Log.i(TAG, "Removing location updates");
+            // LocationServices.FusedLocationApi.removeLocationUpdates(mGoogleApiClient, this);
+            LocationServices.FusedLocationApi.removeLocationUpdates(mGoogleApiClient, getPendingIntent());
             mGoogleApiClient.disconnect();
         }
+        GetLastLocation();
+        // postLocationDataToServer(jsonLocation);
     }
 
     protected synchronized void buildGoogleApiClient() {
@@ -287,14 +386,19 @@ public class FusedLocationHelper extends Activity implements GoogleApiClient.Con
                 .build();
     }
 
-	 protected void createLocationRequest() {
+	protected void createLocationRequest() {
         mLocationRequest = new LocationRequest();
-        mLocationRequest.setPriority(LocationRequest.PRIORITY_BALANCED_POWER_ACCURACY);
+        mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
         mLocationRequest.setInterval(UPDATE_INTERVAL);
-        mLocationRequest.setFastestInterval(FASTEST_INTERVAL);
+        // Sets the fastest rate for active location updates. This interval is exact, and your
+        // application will never receive updates faster than this value.
+        mLocationRequest.setFastestInterval(FASTEST_UPDATE_INTERVAL);
+        // Sets the maximum time when batched location updates are delivered. Updates may be
+        // delivered sooner than this interval.
+        mLocationRequest.setMaxWaitTime(MAX_WAIT_TIME);
     }
     
-     protected void buildLocationSettingsRequest() {
+    protected void buildLocationSettingsRequest() {
         LocationSettingsRequest.Builder builder = new LocationSettingsRequest.Builder();
         builder.addLocationRequest(mLocationRequest);
         mLocationSettingsRequest = builder.build();
@@ -308,8 +412,7 @@ public class FusedLocationHelper extends Activity implements GoogleApiClient.Con
                 );
         result.setResultCallback(this);
     }
-    
-    /* 
+        
     protected void GetLastLocation() {
         Location lastLocation = LocationServices.FusedLocationApi.getLastLocation(mGoogleApiClient);
         if (lastLocation != null) {
@@ -330,46 +433,67 @@ public class FusedLocationHelper extends Activity implements GoogleApiClient.Con
             ErrorHappened("no location available");         
         }
     }
-    
+
     protected void GetAddressFromLocation(Location lastLocation) {
         Geocoder geocoder = new Geocoder(mActivity, Locale.getDefault());
 
         List<Address> addresses = null;
+        JSONObject jsonLocation = new JSONObject();
         
         try {
-            addresses = geocoder.getFromLocation(
-                    lastLocation.getLatitude(),
-                    lastLocation.getLongitude(),
-                    1);
-        } catch (IOException ioException) {
-             ErrorHappened("Service not available");       
-        	return;
-        } catch (IllegalArgumentException illegalArgumentException) {
-             ErrorHappened("Invalid location params used");
-        	return;
-        }
-        
-        // Handle case where no address was found.
-        if (addresses == null || addresses.size()  == 0) {
-             ErrorHappened("No address found");
-        } else {
-            Address address = addresses.get(0);
-            ArrayList<String> addressFragments = new ArrayList<String>();
-            for(int i = 0; i < address.getMaxAddressLineIndex(); i++) {
-                addressFragments.add(address.getAddressLine(i));
+            jsonLocation.put("user_id", getUserId());
+            jsonLocation.put("latitude", lastLocation.getLatitude());
+            jsonLocation.put("longitude", lastLocation.getLongitude());
+            jsonLocation.put("timestamp", lastLocation.getTime());
+            if (mGoogleApiClient != null  &&  mGoogleApiClient.isConnected()) {
+                jsonLocation.put("punchout", 0);
+            }else {
+                jsonLocation.put("punchout", 1);
             }
-            mCallBackWhenGotLocation.success(TextUtils.join(System.getProperty("line.separator"), addressFragments));
+            try {
+                addresses = geocoder.getFromLocation(
+                        lastLocation.getLatitude(),
+                        lastLocation.getLongitude(),
+                        1);
+            } catch (IOException ioException) {
+                ErrorHappened("Service not available");       
+                return;
+            } catch (IllegalArgumentException illegalArgumentException) {
+                ErrorHappened("Invalid location params used");
+                return;
+            }
+            // Handle case where no address was found.
+            if (addresses == null || addresses.size()  == 0) {
+                ErrorHappened("No address found");
+            } else {
+                Address address = addresses.get(0);
+                ArrayList<String> addressFragments = new ArrayList<String>();
+                for(int i = 0; i < address.getMaxAddressLineIndex(); i++) {
+                    addressFragments.add(address.getAddressLine(i));
+                }
+                jsonLocation.put("address", TextUtils.join(System.getProperty("line.separator"), addressFragments));
+            }
+        }catch (JSONException ex) {
+            ErrorHappened("Error generating JSON from location"); 
         }
-    } 
-    */
-    
+        postLocationDataToServer(jsonLocation);
+    }
+
+    @Override
+    public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String s) {
+        if (s.equals(LocationResultHelper.KEY_LOCATION_UPDATES_RESULT)) {
+//            mLocationUpdatesResultView.setText(LocationResultHelper.getSavedLocationResult(this));
+            Log.i(TAG,LocationResultHelper.getSavedLocationResult(this));
+        }
+    }
+   
     @Override
     public void onResult(LocationSettingsResult locationSettingsResult) {
         final Status status = locationSettingsResult.getStatus();
         switch (status.getStatusCode()) {
             case LocationSettingsStatusCodes.SUCCESS:
                 Log.i(TAG, "All location settings are satisfied.");
-                // GetLastLocation();
+                GetLastLocation();
                 startLocationUpdates();
                 break;
             case LocationSettingsStatusCodes.RESOLUTION_REQUIRED:
@@ -400,7 +524,7 @@ public class FusedLocationHelper extends Activity implements GoogleApiClient.Con
                 switch (resultCode) {
                     case Activity.RESULT_OK:
                         Log.i(TAG, "User agreed to make required location settings changes.");
-                        // GetLastLocation();
+                        GetLastLocation();
                         startLocationUpdates();
                         break;
                     case Activity.RESULT_CANCELED:
